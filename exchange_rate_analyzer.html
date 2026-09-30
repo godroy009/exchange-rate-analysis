@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exchange Rate Data Analyzer</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* ========== CSS Reset & Variables ========== */
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --bg-primary:   #0f1117;
+      --bg-secondary: #1a1d27;
+      --bg-card:      #22262f;
+      --bg-card-hover:#2a2f3a;
+      --accent:       #6c63ff;
+      --accent-light: #8b83ff;
+      --accent-dark:  #4f46e5;
+      --green:        #22c55e;
+      --red:          #ef4444;
+      --orange:       #f59e0b;
+      --cyan:         #06b6d4;
+      --text:         #e2e8f0;
+      --text-dim:     #94a3b8;
+      --border:       #2d3140;
+      --radius:       12px;
+      --shadow:       0 4px 24px rgba(0,0,0,.35);
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+    }
+
+    /* ========== Scrollbar ========== */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--bg-secondary); }
+    ::-webkit-scrollbar-thumb { background: var(--accent); border-radius: 4px; }
+
+    /* ========== Navigation ========== */
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(15,17,23,.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem;
+    }
+    .nav-inner {
+      max-width: 1320px; margin: auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 64px;
+    }
+    .nav-brand {
+      font-weight: 800; font-size: 1.15rem;
+      background: linear-gradient(135deg, var(--accent), var(--cyan));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .nav-links { display: flex; gap: .25rem; list-style: none; flex-wrap: wrap; }
+    .nav-links a {
+      color: var(--text-dim); text-decoration: none;
+      padding: .45rem .85rem; border-radius: 8px;
+      font-size: .85rem; font-weight: 500;
+      transition: all .2s;
+    }
+    .nav-links a:hover, .nav-links a.active {
+      color: #fff; background: var(--accent);
+    }
+    .hamburger {
+      display: none; background: none; border: none; color: var(--text);
+      font-size: 1.5rem; cursor: pointer;
+    }
+
+    /* ========== Controls Bar ========== */
+    .controls {
+      max-width: 1320px; margin: 1.5rem auto .5rem;
+      padding: 0 2rem;
+      display: flex; flex-wrap: wrap; gap: .75rem; align-items: center;
+    }
+    .controls label { font-size: .85rem; font-weight: 600; color: var(--text-dim); }
+    .controls select, .controls button {
+      font-family: inherit; font-size: .85rem; font-weight: 600;
+      border: 1px solid var(--border); border-radius: 8px;
+      padding: .5rem 1rem; cursor: pointer;
+      transition: all .25s;
+    }
+    .controls select {
+      background: var(--bg-card); color: var(--text);
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='%2394a3b8' viewBox='0 0 16 16'%3E%3Cpath d='M8 11L3 6h10z'/%3E%3C/svg%3E");
+      background-repeat: no-repeat; background-position: right 10px center;
+      padding-right: 2rem;
+    }
+    .btn-accent {
+      background: var(--accent); color: #fff; border-color: var(--accent);
+    }
+    .btn-accent:hover { background: var(--accent-light); }
+    .btn-green  { background: var(--green); color: #fff; border-color: var(--green); }
+    .btn-green:hover { filter: brightness(1.15); }
+
+    /* ========== Loader ========== */
+    .loader-overlay {
+      position: fixed; inset: 0; z-index: 200;
+      background: rgba(15,17,23,.7);
+      display: flex; align-items: center; justify-content: center;
+      transition: opacity .3s;
+    }
+    .loader-overlay.hidden { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 48px; height: 48px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ========== Error Banner ========== */
+    .error-banner {
+      max-width: 1320px; margin: 1rem auto; padding: .75rem 1.5rem;
+      background: rgba(239,68,68,.15); border: 1px solid var(--red);
+      border-radius: var(--radius); color: var(--red);
+      font-weight: 600; text-align: center; display: none;
+    }
+
+    /* ========== Section ========== */
+    .section {
+      max-width: 1320px; margin: auto;
+      padding: 2rem 2rem 1rem;
+    }
+    .section-title {
+      font-size: 1.5rem; font-weight: 800; margin-bottom: .25rem;
+      display: flex; align-items: center; gap: .5rem;
+    }
+    .section-sub { color: var(--text-dim); font-size: .9rem; margin-bottom: 1.25rem; }
+
+    /* ========== Card Grid ========== */
+    .card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      transition: transform .25s, box-shadow .25s, border-color .25s;
+    }
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: var(--shadow);
+      border-color: var(--accent);
+    }
+    .card-icon {
+      width: 42px; height: 42px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.25rem; margin-bottom: .75rem;
+    }
+    .card-label { font-size: .78rem; color: var(--text-dim); font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+    .card-value { font-size: 1.55rem; font-weight: 800; margin-top: .25rem; }
+
+    /* Card accent colours */
+    .card-purple .card-icon { background: rgba(108,99,255,.15); color: var(--accent); }
+    .card-green  .card-icon { background: rgba(34,197,94,.15);  color: var(--green); }
+    .card-red    .card-icon { background: rgba(239,68,68,.15);  color: var(--red); }
+    .card-orange .card-icon { background: rgba(245,158,11,.15); color: var(--orange); }
+    .card-cyan   .card-icon { background: rgba(6,182,212,.15);  color: var(--cyan); }
+
+    /* ========== Table ========== */
+    .table-wrap {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); overflow: hidden;
+    }
+    .table-toolbar {
+      display: flex; flex-wrap: wrap; gap: .75rem;
+      padding: 1rem 1.25rem; align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-box {
+      flex: 1 1 220px;
+      background: var(--bg-secondary); border: 1px solid var(--border);
+      border-radius: 8px; padding: .5rem .85rem;
+      font-family: inherit; font-size: .85rem; color: var(--text);
+      outline: none; transition: border-color .2s;
+    }
+    .search-box:focus { border-color: var(--accent); }
+    table { width: 100%; border-collapse: collapse; }
+    thead th {
+      text-align: left; padding: .75rem 1.25rem;
+      font-size: .78rem; text-transform: uppercase; letter-spacing: .5px;
+      color: var(--text-dim); background: var(--bg-secondary);
+      cursor: pointer; user-select: none;
+      border-bottom: 1px solid var(--border);
+    }
+    thead th:hover { color: var(--accent); }
+    thead th .sort-arrow { margin-left: .35rem; font-size: .7rem; }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .15s; }
+    tbody tr:hover { background: var(--bg-card-hover); }
+    tbody td { padding: .7rem 1.25rem; font-size: .9rem; }
+    .currency-badge {
+      display: inline-flex; align-items: center; gap: .4rem;
+      background: rgba(108,99,255,.12); color: var(--accent-light);
+      padding: .2rem .6rem; border-radius: 6px; font-weight: 600; font-size: .82rem;
+    }
+
+    /* ========== Comparison Cards ========== */
+    .compare-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 1rem; margin-bottom: 1.5rem;
+    }
+    .compare-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.35rem; text-align: center;
+      transition: transform .25s, box-shadow .25s;
+    }
+    .compare-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+    .compare-flag { font-size: 2rem; margin-bottom: .5rem; }
+    .compare-code { font-size: 1rem; font-weight: 700; color: var(--accent-light); }
+    .compare-rate { font-size: 1.65rem; font-weight: 800; margin-top: .35rem; }
+
+    /* ========== Chart Container ========== */
+    .chart-box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem;
+    }
+    .chart-box canvas { max-height: 400px; }
+
+    /* ========== Top 5 Table ========== */
+    .rank-badge {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border-radius: 50%;
+      font-weight: 700; font-size: .8rem;
+      background: var(--accent); color: #fff;
+    }
+
+    /* ========== Strongest / Weakest ========== */
+    .sw-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .sw-card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 1.5rem; text-align: center;
+      transition: transform .25s, box-shadow .25s;
+    }
+    .sw-card:hover { transform: translateY(-4px); box-shadow: var(--shadow); }
+    .sw-card h3 { font-size: .85rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text-dim); margin-bottom: .5rem; }
+    .sw-card .sw-icon { font-size: 2.5rem; margin-bottom: .4rem; }
+    .sw-card .sw-code { font-size: 1.5rem; font-weight: 800; }
+    .sw-card .sw-rate { font-size: 1rem; color: var(--text-dim); margin-top: .25rem; }
+
+    /* ========== About ========== */
+    .about-content { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 2rem; }
+    .about-content p { margin-bottom: .75rem; color: var(--text-dim); }
+    .tag-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: 1rem; }
+    .tag {
+      background: rgba(108,99,255,.12); color: var(--accent-light);
+      padding: .35rem .85rem; border-radius: 20px; font-size: .82rem; font-weight: 600;
+    }
+
+    /* ========== Footer ========== */
+    footer {
+      text-align: center; padding: 2rem 1rem;
+      color: var(--text-dim); font-size: .8rem;
+      border-top: 1px solid var(--border); margin-top: 2rem;
+    }
+
+    /* ========== Responsive ========== */
+    @media (max-width: 768px) {
+      .nav-links { display: none; flex-direction: column; width: 100%;
+        position: absolute; top: 64px; left: 0;
+        background: var(--bg-secondary); padding: .5rem 1rem;
+        border-bottom: 1px solid var(--border);
+      }
+      .nav-links.open { display: flex; }
+      .hamburger { display: block; }
+      .sw-grid { grid-template-columns: 1fr; }
+      .section { padding: 1.5rem 1rem .5rem; }
+      .controls { padding: 0 1rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ============ LOADER ============ -->
+<div class="loader-overlay" id="loader">
+  <div class="spinner"></div>
+</div>
+
+<!-- ============ NAVIGATION ============ -->
+<nav>
+  <div class="nav-inner">
+    <div class="nav-brand">📊 Exchange Rate Analyzer</div>
+    <button class="hamburger" id="hamburger" aria-label="Menu">☰</button>
+    <ul class="nav-links" id="navLinks">
+      <li><a href="#dashboard" class="active">Dashboard</a></li>
+      <li><a href="#rates">Exchange Rates</a></li>
+      <li><a href="#comparison">Comparison</a></li>
+      <li><a href="#statistics">Statistics</a></li>
+      <li><a href="#visualization">Visualization</a></li>
+      <li><a href="#about">About</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ============ CONTROLS ============ -->
+<div class="controls">
+  <label for="baseCurrency">Base Currency:</label>
+  <select id="baseCurrency">
+    <option value="EUR" selected>EUR – Euro</option>
+    <option value="USD">USD – US Dollar</option>
+    <option value="GBP">GBP – British Pound</option>
+    <option value="INR">INR – Indian Rupee</option>
+    <option value="JPY">JPY – Japanese Yen</option>
+  </select>
+  <button class="btn-accent" id="refreshBtn">🔄 Refresh Data</button>
+  <button class="btn-green"  id="csvBtn">⬇ Download CSV</button>
+</div>
+
+<!-- ============ ERROR BANNER ============ -->
+<div class="error-banner" id="errorBanner">
+  ⚠️ Unable to retrieve exchange-rate data. Please try again.
+</div>
+
+<!-- ====================== DASHBOARD ====================== -->
+<section class="section" id="dashboard">
+  <h2 class="section-title">📋 Dashboard</h2>
+  <p class="section-sub">Overview of the latest exchange-rate data &mdash; updated <span id="apiDate">…</span></p>
+  <div class="card-grid" id="dashboardCards">
+    <!-- Filled by JS -->
+  </div>
+</section>
+
+<!-- ====================== EXCHANGE RATES ====================== -->
+<section class="section" id="rates">
+  <h2 class="section-title">💱 Exchange Rates</h2>
+  <p class="section-sub">All available currencies from the Frankfurter API</p>
+  <div class="table-wrap">
+    <div class="table-toolbar">
+      <input type="text" class="search-box" id="searchBox" placeholder="Search currency code (e.g. USD, INR)…" />
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th id="thCode"># Currency Code <span class="sort-arrow">▲</span></th>
+          <th id="thRate">Exchange Rate <span class="sort-arrow"></span></th>
+        </tr>
+      </thead>
+      <tbody id="ratesBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ====================== CURRENCY COMPARISON ====================== -->
+<section class="section" id="comparison">
+  <h2 class="section-title">🔀 Currency Comparison</h2>
+  <p class="section-sub">Side-by-side comparison of USD, EUR, INR, GBP, and JPY</p>
+  <div class="compare-grid" id="compareGrid"></div>
+  <div class="chart-box">
+    <canvas id="compareChart"></canvas>
+  </div>
+</section>
+
+<!-- ====================== TOP 5 HIGHEST ====================== -->
+<section class="section" id="top5">
+  <h2 class="section-title">🏆 Five Highest Exchange Rates</h2>
+  <p class="section-sub">Currencies with the highest rates relative to the base currency</p>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Rank</th><th>Currency Code</th><th>Exchange Rate</th></tr>
+      </thead>
+      <tbody id="top5Body"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ====================== STATISTICS ====================== -->
+<section class="section" id="statistics">
+  <h2 class="section-title">📐 Statistics</h2>
+  <p class="section-sub">Descriptive statistics calculated from the exchange-rate data</p>
+  <div class="card-grid" id="statsCards"></div>
+</section>
+
+<!-- ====================== VISUALIZATION ====================== -->
+<section class="section" id="visualization">
+  <h2 class="section-title">📈 Visualization</h2>
+  <p class="section-sub">Interactive bar chart powered by Chart.js</p>
+  <div class="chart-box">
+    <div style="margin-bottom:1rem;display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+      <label for="chartFilter" style="font-size:.85rem;font-weight:600;color:var(--text-dim);">Show:</label>
+      <select id="chartFilter" style="background:var(--bg-secondary);border:1px solid var(--border);border-radius:8px;padding:.45rem .85rem;font-family:inherit;font-size:.85rem;color:var(--text);cursor:pointer;">
+        <option value="top5">Top 5 Currencies</option>
+        <option value="bottom5">Bottom 5 Currencies</option>
+        <option value="selected">USD / EUR / INR / GBP / JPY</option>
+      </select>
+    </div>
+    <canvas id="mainChart"></canvas>
+  </div>
+</section>
+
+<!-- ====================== STRONGEST & WEAKEST ====================== -->
+<section class="section" id="strongWeak">
+  <h2 class="section-title">💪 Strongest & Weakest Currency</h2>
+  <p class="section-sub">Relative to the selected base currency</p>
+  <div class="sw-grid" id="swGrid"></div>
+</section>
+
+<!-- ====================== ABOUT ====================== -->
+<section class="section" id="about">
+  <h2 class="section-title">ℹ️ About</h2>
+  <p class="section-sub">Project overview and learning objectives</p>
+  <div class="about-content">
+    <p>This project demonstrates data extraction from an API using the <strong>Frankfurter Exchange Rate API</strong>. The retrieved JSON data is converted into structured data and analyzed using statistical calculations and visualizations.</p>
+    <p>It serves as a practical example for a <strong>college Data Science practical</strong>, showcasing real-world data engineering techniques in the browser.</p>
+    <h4 style="margin:1rem 0 .5rem;color:var(--text);">Key Demonstrations</h4>
+    <div class="tag-list">
+      <span class="tag">📡 API Data Extraction</span>
+      <span class="tag">🔄 JSON Processing</span>
+      <span class="tag">📊 Data Analysis</span>
+      <span class="tag">📈 Data Visualization</span>
+      <span class="tag">⬇️ CSV Export</span>
+      <span class="tag">🔍 Search & Sort</span>
+      <span class="tag">🧮 Statistical Calculations</span>
+      <span class="tag">🌐 Responsive Design</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  Exchange Rate Data Analyzer &copy; 2026 &mdash; Data Science Practical Project &mdash; Powered by
+  <a href="https://www.frankfurter.app/" target="_blank" style="color:var(--accent);">Frankfurter API</a>
+  &amp;
+  <a href="https://www.chartjs.org/" target="_blank" style="color:var(--accent);">Chart.js</a>
+</footer>
+
+<!-- ========================= JAVASCRIPT ========================= -->
+<script>
+// =====================================================================
+// Exchange Rate Data Analyzer — Main Script
+// =====================================================================
+
+// ---------- Currency emoji flags (ISO 3166-1 → regional indicators) ----------
+const FLAG_MAP = {
+  AUD:'🇦🇺',BGN:'🇧🇬',BRL:'🇧🇷',CAD:'🇨🇦',CHF:'🇨🇭',CNY:'🇨🇳',CZK:'🇨🇿',
+  DKK:'🇩🇰',EUR:'🇪🇺',GBP:'🇬🇧',HKD:'🇭🇰',HUF:'🇭🇺',IDR:'🇮🇩',ILS:'🇮🇱',
+  INR:'🇮🇳',ISK:'🇮🇸',JPY:'🇯🇵',KRW:'🇰🇷',MXN:'🇲🇽',MYR:'🇲🇾',NOK:'🇳🇴',
+  NZD:'🇳🇿',PHP:'🇵🇭',PLN:'🇵🇱',RON:'🇷🇴',SEK:'🇸🇪',SGD:'🇸🇬',THB:'🇹🇭',
+  TRY:'🇹🇷',USD:'🇺🇸',ZAR:'🇿🇦'
+};
+const flag = code => FLAG_MAP[code] || '💱';
+
+// ---------- DOM References ----------
+const loader       = document.getElementById('loader');
+const errorBanner  = document.getElementById('errorBanner');
+const baseSel      = document.getElementById('baseCurrency');
+const refreshBtn   = document.getElementById('refreshBtn');
+const csvBtn       = document.getElementById('csvBtn');
+const searchBox    = document.getElementById('searchBox');
+const chartFilter  = document.getElementById('chartFilter');
+
+// ---------- State ----------
+let ratesData   = {};      // { code: rate, … }
+let ratesDate   = '';      // "2026-09-30"
+let baseCurrency = 'EUR';
+let sortCol     = 'code';  // 'code' | 'rate'
+let sortAsc     = true;
+
+// ---------- Chart instances ----------
+let compareChartInst = null;
+let mainChartInst    = null;
+
+// =====================================================================
+// 1. Fetch latest exchange rates from the Frankfurter API
+// =====================================================================
+async function fetchRates() {
+  showLoader(true);
+  hideError();
+  try {
+    const url  = `https://api.frankfurter.app/latest?base=${baseCurrency}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const json = await resp.json();
+
+    // 2. Extract currency codes and exchange rates
+    ratesData = json.rates;   // e.g. { USD: 1.08, INR: 90.5, … }
+    ratesDate = json.date;
+
+    // 3. Convert JSON data into structured arrays used throughout
+    refreshAll();
+  } catch (err) {
+    console.error('Fetch error:', err);
+    showError();
+  } finally {
+    showLoader(false);
+  }
+}
+
+// =====================================================================
+// Refresh every section from current ratesData
+// =====================================================================
+function refreshAll() {
+  renderDashboard();
+  renderTable();
+  renderComparison();
+  renderTop5();
+  renderStatistics();
+  renderMainChart();
+  renderStrongestWeakest();
+}
+
+// =====================================================================
+// DASHBOARD
+// =====================================================================
+function renderDashboard() {
+  const codes  = Object.keys(ratesData);
+  const values = Object.values(ratesData);
+  const max    = Math.max(...values);
+  const min    = Math.min(...values);
+  const avg    = (values.reduce((s, v) => s + v, 0) / values.length).toFixed(4);
+
+  document.getElementById('apiDate').textContent = ratesDate;
+
+  document.getElementById('dashboardCards').innerHTML = `
+    <div class="card card-purple">
+      <div class="card-icon">💰</div>
+      <div class="card-label">Base Currency</div>
+      <div class="card-value">${flag(baseCurrency)} ${baseCurrency}</div>
+    </div>
+    <div class="card card-cyan">
+      <div class="card-icon">🌍</div>
+      <div class="card-label">Available Currencies</div>
+      <div class="card-value">${codes.length}</div>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">📈</div>
+      <div class="card-label">Highest Rate</div>
+      <div class="card-value">${max.toLocaleString()}</div>
+    </div>
+    <div class="card card-red">
+      <div class="card-icon">📉</div>
+      <div class="card-label">Lowest Rate</div>
+      <div class="card-value">${min.toLocaleString()}</div>
+    </div>
+    <div class="card card-orange">
+      <div class="card-icon">📊</div>
+      <div class="card-label">Average Rate</div>
+      <div class="card-value">${avg}</div>
+    </div>
+  `;
+}
+
+// =====================================================================
+// EXCHANGE RATES TABLE  (searchable & sortable)
+// =====================================================================
+function renderTable() {
+  const query = searchBox.value.trim().toUpperCase();
+  let entries = Object.entries(ratesData); // [ [code, rate], … ]
+
+  // Search filter
+  if (query) {
+    entries = entries.filter(([code]) => code.includes(query));
+  }
+
+  // Sort
+  entries.sort((a, b) => {
+    let cmp = sortCol === 'code'
+      ? a[0].localeCompare(b[0])
+      : a[1] - b[1];
+    return sortAsc ? cmp : -cmp;
+  });
+
+  // Update sort arrows in header
+  document.getElementById('thCode').innerHTML =
+    `# Currency Code <span class="sort-arrow">${sortCol === 'code' ? (sortAsc ? '▲' : '▼') : ''}</span>`;
+  document.getElementById('thRate').innerHTML =
+    `Exchange Rate <span class="sort-arrow">${sortCol === 'rate' ? (sortAsc ? '▲' : '▼') : ''}</span>`;
+
+  // Render rows
+  const tbody = document.getElementById('ratesBody');
+  tbody.innerHTML = entries.map(([code, rate]) => `
+    <tr>
+      <td><span class="currency-badge">${flag(code)} ${code}</span></td>
+      <td>${rate.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 6})}</td>
+    </tr>
+  `).join('');
+}
+
+// =====================================================================
+// 5. CURRENCY COMPARISON — USD, EUR, INR, GBP, JPY
+// =====================================================================
+const COMPARE_CURRENCIES = ['USD', 'EUR', 'INR', 'GBP', 'JPY'];
+
+function renderComparison() {
+  const grid = document.getElementById('compareGrid');
+  grid.innerHTML = COMPARE_CURRENCIES.map(code => {
+    // If the code is the base currency its rate is 1 (itself)
+    const rate = code === baseCurrency ? 1 : (ratesData[code] ?? '—');
+    return `
+      <div class="compare-card">
+        <div class="compare-flag">${flag(code)}</div>
+        <div class="compare-code">${code}</div>
+        <div class="compare-rate">${typeof rate === 'number' ? rate.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:4}) : rate}</div>
+      </div>
+    `;
+  }).join('');
+
+  // Bar chart
+  const labels = COMPARE_CURRENCIES;
+  const data   = COMPARE_CURRENCIES.map(c => c === baseCurrency ? 1 : (ratesData[c] ?? 0));
+
+  if (compareChartInst) compareChartInst.destroy();
+  compareChartInst = new Chart(document.getElementById('compareChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: `Exchange Rate (base ${baseCurrency})`,
+        data,
+        backgroundColor: ['#6c63ff','#06b6d4','#f59e0b','#22c55e','#ef4444'],
+        borderRadius: 6,
+        maxBarThickness: 60
+      }]
+    },
+    options: chartOptions('Currency Comparison')
+  });
+}
+
+// =====================================================================
+// 4. FIVE HIGHEST EXCHANGE RATES
+// =====================================================================
+function renderTop5() {
+  const sorted = Object.entries(ratesData).sort((a, b) => b[1] - a[1]);
+  const top    = sorted.slice(0, 5);
+
+  document.getElementById('top5Body').innerHTML = top.map(([code, rate], i) => `
+    <tr>
+      <td><span class="rank-badge">${i + 1}</span></td>
+      <td><span class="currency-badge">${flag(code)} ${code}</span></td>
+      <td>${rate.toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:4})}</td>
+    </tr>
+  `).join('');
+}
+
+// =====================================================================
+// STATISTICS
+// =====================================================================
+function renderStatistics() {
+  const values = Object.values(ratesData);
+  const total  = values.length;
+  const max    = Math.max(...values);
+  const min    = Math.min(...values);
+  const mean   = (values.reduce((s, v) => s + v, 0) / total);
+
+  // Median
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid    = Math.floor(sorted.length / 2);
+  const median = sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+
+  document.getElementById('statsCards').innerHTML = `
+    <div class="card card-purple">
+      <div class="card-icon">🌐</div>
+      <div class="card-label">Total Currencies</div>
+      <div class="card-value">${total}</div>
+    </div>
+    <div class="card card-green">
+      <div class="card-icon">⬆️</div>
+      <div class="card-label">Maximum Rate</div>
+      <div class="card-value">${max.toLocaleString(undefined,{maximumFractionDigits:4})}</div>
+    </div>
+    <div class="card card-red">
+      <div class="card-icon">⬇️</div>
+      <div class="card-label">Minimum Rate</div>
+      <div class="card-value">${min.toLocaleString(undefined,{maximumFractionDigits:4})}</div>
+    </div>
+    <div class="card card-orange">
+      <div class="card-icon">📊</div>
+      <div class="card-label">Mean Rate</div>
+      <div class="card-value">${mean.toFixed(4)}</div>
+    </div>
+    <div class="card card-cyan">
+      <div class="card-icon">📏</div>
+      <div class="card-label">Median Rate</div>
+      <div class="card-value">${median.toFixed(4)}</div>
+    </div>
+  `;
+}
+
+// =====================================================================
+// 7. VISUALIZATION — Main Chart with filter dropdown
+// =====================================================================
+function renderMainChart() {
+  const filter = chartFilter.value;
+  const sorted = Object.entries(ratesData).sort((a, b) => b[1] - a[1]);
+
+  let subset;
+  if (filter === 'top5') {
+    subset = sorted.slice(0, 5);
+  } else if (filter === 'bottom5') {
+    subset = sorted.slice(-5).reverse();
+  } else {
+    // selected — USD / EUR / INR / GBP / JPY
+    subset = COMPARE_CURRENCIES.map(c => [c, c === baseCurrency ? 1 : (ratesData[c] ?? 0)]);
+  }
+
+  const labels = subset.map(s => s[0]);
+  const data   = subset.map(s => s[1]);
+  const colors = ['#6c63ff','#22c55e','#f59e0b','#06b6d4','#ef4444'];
+
+  if (mainChartInst) mainChartInst.destroy();
+  mainChartInst = new Chart(document.getElementById('mainChart'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: `Exchange Rate (base ${baseCurrency})`,
+        data,
+        backgroundColor: colors,
+        borderRadius: 6,
+        maxBarThickness: 60
+      }]
+    },
+    options: chartOptions('Exchange Rate Visualization')
+  });
+}
+
+// =====================================================================
+// 8. STRONGEST & WEAKEST CURRENCY
+// =====================================================================
+function renderStrongestWeakest() {
+  const entries = Object.entries(ratesData);
+  if (!entries.length) return;
+
+  // Lowest numeric rate  → strongest (you need less of it to equal 1 base unit)
+  // Highest numeric rate → weakest
+  const sorted   = entries.sort((a, b) => a[1] - b[1]);
+  const strongest = sorted[0];
+  const weakest   = sorted[sorted.length - 1];
+
+  document.getElementById('swGrid').innerHTML = `
+    <div class="sw-card" style="border-left:4px solid var(--green);">
+      <h3>💪 Strongest Currency</h3>
+      <div class="sw-icon">${flag(strongest[0])}</div>
+      <div class="sw-code">${strongest[0]}</div>
+      <div class="sw-rate">${strongest[1].toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:6})}</div>
+    </div>
+    <div class="sw-card" style="border-left:4px solid var(--red);">
+      <h3>📉 Weakest Currency</h3>
+      <div class="sw-icon">${flag(weakest[0])}</div>
+      <div class="sw-code">${weakest[0]}</div>
+      <div class="sw-rate">${weakest[1].toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:6})}</div>
+    </div>
+  `;
+}
+
+// =====================================================================
+// 6. CSV DOWNLOAD
+// =====================================================================
+function downloadCSV() {
+  // Build CSV content
+  let csv = 'Currency,Exchange Rate\n';
+  Object.entries(ratesData)
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([code, rate]) => {
+      csv += `${code},${rate}\n`;
+    });
+
+  // Create a Blob and trigger download
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = 'exchange_rates.csv';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// =====================================================================
+// Shared Chart.js options helper
+// =====================================================================
+function chartOptions(title) {
+  return {
+    responsive: true,
+    maintainAspectRatio: true,
+    plugins: {
+      legend: { display: false },
+      title: {
+        display: true,
+        text: title,
+        color: '#e2e8f0',
+        font: { size: 15, weight: '700', family: 'Inter' },
+        padding: { bottom: 16 }
+      },
+      tooltip: {
+        backgroundColor: '#22262f',
+        titleColor: '#e2e8f0',
+        bodyColor: '#94a3b8',
+        borderColor: '#2d3140',
+        borderWidth: 1,
+        cornerRadius: 8,
+        padding: 10
+      }
+    },
+    scales: {
+      x: {
+        ticks: { color: '#94a3b8', font: { weight: '600' } },
+        grid:  { color: 'rgba(45,49,64,.5)' }
+      },
+      y: {
+        ticks: { color: '#94a3b8' },
+        grid:  { color: 'rgba(45,49,64,.5)' },
+        beginAtZero: true
+      }
+    }
+  };
+}
+
+// =====================================================================
+// Utility — loader & error
+// =====================================================================
+function showLoader(show) {
+  loader.classList.toggle('hidden', !show);
+}
+function showError() {
+  errorBanner.style.display = 'block';
+}
+function hideError() {
+  errorBanner.style.display = 'none';
+}
+
+// =====================================================================
+// EVENT LISTENERS
+// =====================================================================
+
+// Base currency change → re-fetch data
+baseSel.addEventListener('change', () => {
+  baseCurrency = baseSel.value;
+  fetchRates();
+});
+
+// Refresh button
+refreshBtn.addEventListener('click', () => fetchRates());
+
+// CSV download
+csvBtn.addEventListener('click', () => downloadCSV());
+
+// Search box → filter table live
+searchBox.addEventListener('input', () => renderTable());
+
+// Chart filter dropdown
+chartFilter.addEventListener('change', () => renderMainChart());
+
+// Sortable columns
+document.getElementById('thCode').addEventListener('click', () => {
+  if (sortCol === 'code') { sortAsc = !sortAsc; } else { sortCol = 'code'; sortAsc = true; }
+  renderTable();
+});
+document.getElementById('thRate').addEventListener('click', () => {
+  if (sortCol === 'rate') { sortAsc = !sortAsc; } else { sortCol = 'rate'; sortAsc = true; }
+  renderTable();
+});
+
+// Hamburger menu
+document.getElementById('hamburger').addEventListener('click', () => {
+  document.getElementById('navLinks').classList.toggle('open');
+});
+
+// Active nav link highlighting on scroll
+const sections = document.querySelectorAll('.section');
+const navAnchors = document.querySelectorAll('.nav-links a');
+window.addEventListener('scroll', () => {
+  let current = '';
+  sections.forEach(sec => {
+    if (window.scrollY >= sec.offsetTop - 120) {
+      current = sec.getAttribute('id');
+    }
+  });
+  navAnchors.forEach(a => {
+    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+  });
+});
+
+// Close mobile nav on link click
+navAnchors.forEach(a => a.addEventListener('click', () => {
+  document.getElementById('navLinks').classList.remove('open');
+}));
+
+// =====================================================================
+// INIT — Fetch rates on page load
+// =====================================================================
+fetchRates();
+</script>
+</body>
+</html>
